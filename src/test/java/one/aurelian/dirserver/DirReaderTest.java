@@ -1,7 +1,7 @@
 package one.aurelian.dirserver;
 
 import lombok.extern.java.Log;
-import one.aurelian.dirserver.models.raw.RawTransaction;
+import one.aurelian.dirserver.raw.RawTransaction;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 
 @Log
@@ -21,5 +23,6 @@ class DirReaderTest {
             Path.of(Objects.requireNonNull(getClass().getClassLoader().getResource("datasetA")).getPath())
         ).collect(Collectors.toList());
         log.info(transactions.toString());
+        assertThat(transactions).hasSize(3);
     }
 }

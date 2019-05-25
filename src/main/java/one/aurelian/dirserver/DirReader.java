@@ -1,15 +1,15 @@
 package one.aurelian.dirserver;
 
-import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonLocation;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.Value;
-import one.aurelian.dirserver.models.raw.RawTransaction;
+import one.aurelian.dirserver.raw.RawTransaction;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -25,11 +25,11 @@ import java.util.stream.Stream;
 @Builder
 public class DirReader {
 
-    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("json");
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("json", "yaml", "yml");
 
     @NonNull
     @Builder.Default
-    ObjectMapper objectMapper = new ObjectMapper(new JsonFactory()).findAndRegisterModules();
+    ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory()).findAndRegisterModules();
 
     @NonNull
     @Builder.Default

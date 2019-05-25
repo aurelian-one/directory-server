@@ -1,7 +1,6 @@
-package one.aurelian.dirserver.models;
+package one.aurelian.dirserver.raw;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import one.aurelian.dirserver.models.raw.RawTransaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -41,13 +40,11 @@ class RawTransactionTest {
         assertThat(t.getEntries()).hasSize(2);
         assertThat(t.getEntries().get(0)).satisfies(e -> {
             assertThat(e.getAccountId()).isEqualTo("expenses.food_&_drink.groceries");
-            assertThat(e.getAccountIdAsList()).containsExactly("expenses", "food_&_drink", "groceries");
             assertThat(e.getCurrency()).isEqualTo("£");
             assertThat(e.getValueAsDecimal()).isEqualTo(new BigDecimal("10.45"));
         });
         assertThat(t.getEntries().get(1)).satisfies(e -> {
             assertThat(e.getAccountId()).isEqualTo("assets.monzo.current_account");
-            assertThat(e.getAccountIdAsList()).containsExactly("assets", "monzo", "current_account");
             assertThat(e.getCurrency()).isEqualTo("£");
             assertThat(e.getValueAsDecimal()).isEqualTo(new BigDecimal("-10.45"));
         });

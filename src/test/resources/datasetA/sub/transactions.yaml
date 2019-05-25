@@ -1,0 +1,10 @@
+- timeOccurred: 1970-01-01T00:00:00Z
+  description: Hello world
+  tags:
+    merchant: ASDA
+  entries:
+    - accountId: expense.transport.FirstBus
+      value: "3.333"
+      currency: $
+    - accountId: assets.monzo.current
+      value: -3.333 $
