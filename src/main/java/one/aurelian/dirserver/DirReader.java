@@ -1,6 +1,7 @@
 package one.aurelian.dirserver;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonLocation;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -8,32 +9,31 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.Value;
-import lombok.extern.java.Log;
 import one.aurelian.dirserver.models.raw.RawTransaction;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 @Value
 @Builder
-@Log
 public class DirReader {
 
     private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("json");
 
     @NonNull
-    Path root;
+    @Builder.Default
+    ObjectMapper objectMapper = new ObjectMapper(new JsonFactory()).findAndRegisterModules();
 
-    @NonNull @Builder.Default
+    @NonNull
+    @Builder.Default
     Integer maxDepth = 10;
-
-    @NonNull @Builder.Default
-    ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private static String getFileExtension(Path path) {
         final var fn = path.getFileName().toString();
@@ -41,64 +41,68 @@ public class DirReader {
         return (i < 0) ? "" : fn.substring(i + 1);
     }
 
-    Stream<Path> stream() throws IOException {
-        if (maxDepth < 1) {
+    public Stream<Path> streamPathsFromDir(@NonNull Path root) throws IOException {
+        if (getMaxDepth() < 1) {
             throw new IllegalArgumentException("max depth must be >= 1");
         }
         return Files.find(
             root,
-            10,
+            getMaxDepth(),
             (path, stat) -> stat.isRegularFile() && SUPPORTED_EXTENSIONS.contains(getFileExtension(path.getFileName()))
         );
     }
 
-    Stream<RawTransaction> streamTransactionsFromPath(@NonNull Path path) {
-        JsonFactory factory = new JsonFactory();
-        factory = factory.setCodec(objectMapper);
+    static URI getLocationURI(Path path, JsonLocation location) {
+        return URI.create(String.format("%s#%s:%s", path.toUri(), location.getLineNr(), location.getColumnNr()));
+    }
+
+    static void assertToken(JsonParser parser, JsonToken token) {
+        if (parser.currentToken() != token) {
+            throw new UncheckedIOException(new IOException(String.format(
+                "Expected %s, got %s (%s)", token, parser.currentToken(), parser.getCurrentLocation()
+            )));
+        }
+    }
+
+    static RawTransaction readNextTransaction(Path path, JsonParser parser) {
         try {
-            JsonParser parser = factory.createParser(path.toFile());
-            if (parser.nextToken() != JsonToken.START_ARRAY) {
-                throw new IOException(String.format("Expected start of array, got %s (%s)", parser.getCurrentToken(), parser.getCurrentLocation()));
-            }
             parser.nextToken();
-            if (parser.getCurrentToken() == JsonToken.END_ARRAY) {
-                return Stream.empty();
+            if (parser.currentToken() == JsonToken.END_ARRAY) {
+                return null;
             }
-            return Stream.generate((Supplier<RawTransaction>) () -> {
-                try {
-                    if (parser.getCurrentToken() != JsonToken.START_OBJECT) {
-                        throw new IOException(String.format("Expected start of object, got %s (%s)", parser.getCurrentToken(), parser.getCurrentLocation()));
-                    }
-                    return parser.readValueAs(new TypeReference<RawTransaction>() {});
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            }).takeWhile(rawTransaction -> {
-                try {
-                    parser.nextToken();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-                if (parser.getCurrentToken() == JsonToken.START_OBJECT) {
-                    return true;
-                }
-                if (parser.getCurrentToken() == JsonToken.END_ARRAY) {
-                    return false;
-                }
-                throw new UncheckedIOException(new IOException(String.format("Expected start of object or end of array, got %s (%s)", parser.getCurrentToken(), parser.getCurrentLocation())));
-            }).onClose(() -> {
-                try {
-                    parser.close();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            });
+            assertToken(parser, JsonToken.START_OBJECT);
+            URI locationAsURI = getLocationURI(path, parser.getCurrentLocation());
+            RawTransaction transaction = parser.readValueAs(new TypeReference<RawTransaction>() {});
+            return transaction.toBuilder().sourceURI(locationAsURI).build();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    public Stream<RawTransaction> streamTransactions() throws IOException {
-        return stream().flatMap(this::streamTransactionsFromPath);
+    static void uncheckedClose(Closeable subject) {
+        try {
+            subject.close();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public Stream<RawTransaction> streamTransactionsFromPath(@NonNull Path path) throws UncheckedIOException {
+        try {
+            JsonParser parser = objectMapper.getFactory().createParser(path.toFile());
+            parser.nextToken();
+            assertToken(parser, JsonToken.START_ARRAY);
+            return Stream.generate(() -> readNextTransaction(path, parser))
+                    .takeWhile(Objects::nonNull)
+                    .onClose(() -> uncheckedClose(parser));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public Stream<RawTransaction> streamTransactionsFromDir(
+        @NonNull Path root
+    ) throws IOException, UncheckedIOException {
+        return streamPathsFromDir(root).flatMap(this::streamTransactionsFromPath);
     }
 }
