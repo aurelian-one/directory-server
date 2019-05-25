@@ -1,0 +1,19 @@
+{
+  "timeOccurred": "1970-01-01T00:00:00Z",
+  "description": "Some example transaction",
+  "tags": {
+    "merchant": "CO-OP"
+  },
+  "entries": [
+    {
+      "accountId": "expenses.food_&_drink.groceries",
+      "value": "10.45",
+      "currency": "£"
+    },
+    {
+      "accountId": "assets.monzo.current_account",
+      "value": "-10.45",
+      "currency": "£"
+    }
+  ]
+}
